@@ -437,9 +437,8 @@
                     <p>Fungsi untuk menambah, mengedit, atau menghapus data user.</p>
 
                     <form id="user-form">
-                        <input type="hidden" id="user-id">
-                        <input type="text" id="user-username" placeholder="Username" required>
-                        <input type="email" id="user-email" placeholder="Email" required>
+                        <input type="hidden" id="user-username-hidden"> <input type="text" id="user-username" placeholder="Username" required>
+                        <input type="text" id="user-email" placeholder="Email" required>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label for="user-role" style="margin-bottom: 0;">Role:</label>
                             <select id="user-role" required>
@@ -458,7 +457,6 @@
                         <table id="user-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
                                     <th>Username</th>
                                     <th>Email</th>
                                     <th>Role</th>
@@ -477,27 +475,90 @@
     </div>
 
     <script>
+        // ======================================
+        // C. KONEKSI API TERPUSAT (SheetDB) - PERUBAHAN UTAMA DI SINI
+        // ======================================
+        
+        // TEMPELKAN LINK SHEETDB ANDA DI SINI
+        const BASE_API_URL = 'https://sheetdb.io/api/v1/u3plihngfze98'; 
+
         const mainAppContainer = document.getElementById('main-app-container');
         const THRESHOLD = 3; 
         
         let currentUsername = null;
         let currentUserRole = null; 
-        
-        // VARIABEL GLOBAL BARU UNTUK MENYIMPAN HASIL PEMBAYARAN TERAKHIR
         let lastTotalPayout = 0; 
         
-        // Initial Data for User Management - TAMBAHKAN PROPERTI 'status'
-        let users = [
-            // Master/Admin harus APPROVED
-            // START MODIFIKASI: Akun cg88 dengan password asd1234
-            { id: 1, username: 'cg88', email: 'master@example.com', password: 'asd1234', role: 'MASTER', status: 'APPROVED' },
-            // END MODIFIKASI
-            { id: 2, username: 'admin', email: 'admin@example.com', password: 'password123', role: 'MASTER', status: 'APPROVED' },
-            // User CS dan Kapten juga di-set APPROVED default untuk akun yang sudah ada
-            { id: 3, username: 'testuser', email: 'test@example.com', password: 'password123', role: 'CS', status: 'APPROVED' },
-            { id: 4, username: 'kapten', email: 'kapten@example.com', password: 'password123', role: 'KAPTEN', status: 'APPROVED' }
-        ];
-        let nextUserId = 5;
+        // Inisiasi array kosong. Akan diisi oleh fetchUsers()
+        let users = []; 
+        let nextUserId = 1; // ID ini tidak lagi relevan, tapi dipertahankan untuk kompatibilitas kode lama.
+
+        // FUNGSI UTAMA: Mengambil semua data user dari SheetDB
+        async function fetchUsers() {
+            try {
+                const response = await fetch(BASE_API_URL);
+                if (!response.ok) {
+                    throw new Error('Gagal mengambil data user dari SheetDB. Cek status Sheets Anda.');
+                }
+                const data = await response.json();
+                
+                // PENTING: Map dan parse data dari SheetDB. 
+                // SheetDB menyimpan angka dan JSON sebagai string.
+                users = data.map(user => ({
+                    // ID lokal tidak lagi digunakan, tapi kita masukkan username sebagai identifier.
+                    id: user.username, 
+                    username: user.username,
+                    email: user.email || 'default@email.com',
+                    password: user.password,
+                    role: user.role,
+                    status: user.status || 'PENDING',
+                    // Pastikan properti ip_history ada (walaupun hanya string '[]' dari Sheets)
+                    ip_history: user.ip_history ? JSON.parse(user.ip_history) : []
+                }));
+                
+                console.log("Data user berhasil di-fetch dan di-parse:", users);
+                return users;
+            } catch (error) {
+                console.error('Fetch Users Error:', error);
+                alert('Gagal terhubung ke database terpusat. Pastikan Google Sheet dan SheetDB Anda aktif dan sudah di-Share.');
+                return [];
+            }
+        }
+        
+        // Fungsi Helper untuk Update Status/Data User di SheetDB
+        async function updateUserOnSheetDB(username, updateData) {
+            // SheetDB menggunakan /username/:value untuk mencari dan mengupdate
+            const searchUrl = `${BASE_API_URL}/username/${username}`; 
+            
+            const dataToSend = {
+                data: updateData
+            };
+            
+            try {
+                const response = await fetch(searchUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(dataToSend)
+                });
+
+                if (response.ok) {
+                    // Jika berhasil, muat ulang data global agar data yang ditampilkan selalu baru
+                    await fetchUsers(); 
+                    return true;
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Error server saat update.' }));
+                    alert(`Gagal update user ${username}. Pesan: ${errorData.message}`);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error Update:', error);
+                alert('Gagal terhubung ke SheetDB saat update.');
+                return false;
+            }
+        }
+
 
         // ======================================
         // A. Fungsi Navigasi & Utility
@@ -517,9 +578,6 @@
                 document.getElementById(viewId).style.display = 'block'; 
                 currentUsername = null; 
                 currentUserRole = null;
-                // Pastikan sesi dihapus jika kembali ke login-view tanpa logout (misal, sesi kedaluwarsa)
-                sessionStorage.removeItem('loggedInUser');
-                sessionStorage.removeItem('loggedInRole');
             }
         }
         
@@ -532,10 +590,8 @@
 
             // 2. Tangani menu yang disembunyikan untuk KAPTEN (Cek IP & Prediksi Bola)
             const kaptenHiddenMenus = document.querySelectorAll('.menu-kapten-hidden');
-            // Jika role adalah KAPTEN, sembunyikan (none). Selain KAPTEN, tampilkan (block).
             const kaptenHiddenVisibility = (role === 'KAPTEN') ? 'none' : 'block'; 
             kaptenHiddenMenus.forEach(menu => {
-                // FIX: Menggunakan menu.style.display, bukan menu.display
                 menu.style.display = kaptenHiddenVisibility;
             });
             
@@ -575,7 +631,6 @@
 
             // Panggil fungsi update info box saat berpindah ke Cek IP
             if (contentId === 'cek-ip') {
-                 // Hanya kirim username
                  updateUserInfoBox(currentUsername); 
             } else {
                  updateUserInfoBox(null); // Kosongkan box di menu lain
@@ -589,11 +644,6 @@
         }
 
         function handleLogout() {
-            // START MODIFIKASI: Clear sesi saat logout
-            sessionStorage.removeItem('loggedInUser');
-            sessionStorage.removeItem('loggedInRole');
-            // END MODIFIKASI
-
             alert('Anda telah berhasil keluar (logout).');
             currentUsername = null; 
             currentUserRole = null;
@@ -606,6 +656,9 @@
         // ======================================
         // B. Logika Cek IP & History IP
         // ======================================
+        
+        // ... (Kode Logika Cek IP dan History IP tetap sama) ... 
+        // NOTE: History IP masih menggunakan localStorage, belum terpusat.
         
         function processData() {
             const rawData = document.getElementById('logInput').value;
@@ -740,7 +793,7 @@
             history.forEach((entry, index) => {
                 const formattedTime = formatHistoryTimestamp(entry.timestamp); 
                 
-                const row = tbody.insertCell();
+                const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${formattedTime}</td>
                     <td>${entry.username}</td>
@@ -765,7 +818,7 @@
 
 
         // ======================================
-        // C. Logika CEK TO CRM 
+        // C. Logika CEK TO CRM (TIDAK BERUBAH)
         // ======================================
         
         function processToData() {
@@ -823,7 +876,7 @@
 
 
         // ======================================
-        // D. Logika HITUNG KEMENANGAN PG SOFT (Hanya Pembayaran)
+        // D. Logika HITUNG KEMENANGAN PG SOFT (TIDAK BERUBAH)
         // ======================================
         
         function processPgSoftData() {
@@ -971,7 +1024,7 @@
 
 
         // ======================================
-        // E. Logika Prediksi Bola
+        // E. Logika Prediksi Bola (TIDAK BERUBAH)
         // ======================================
 
         function generateTable() {
@@ -1050,35 +1103,34 @@
 
 
         // ======================================
-        // F. Logika CRUD User & Approval
+        // F. Logika CRUD User & Approval (DIUBAH TOTAL UNTUK API)
         // ======================================
         
         function renderUserTable() {
             const tbody = document.getElementById('user-table').querySelector('tbody');
             tbody.innerHTML = ''; 
+            
+            // Data user diambil dari array global 'users' yang sudah diisi fetchUsers()
 
             users.forEach(user => {
                 const row = tbody.insertRow();
                 
-                let statusText = '';
+                let statusText = user.status;
                 let statusClass = '';
                 let actionButtons = '';
 
                 switch (user.status) {
                     case 'APPROVED':
-                        statusText = 'APPROVED';
                         statusClass = 'status-approved';
-                        actionButtons = `<button class="btn-danger" style="width: auto; margin: 2px;" onclick="rejectUser(${user.id})">Tolak</button>`;
+                        actionButtons = `<button class="btn-danger" style="width: auto; margin: 2px;" onclick="rejectUser('${user.username}')">Tolak</button>`;
                         break;
                     case 'PENDING':
-                        statusText = 'PENDING';
                         statusClass = 'status-pending';
-                        actionButtons = `<button class="btn-warning" style="width: auto; margin: 2px;" onclick="approveUser(${user.id})">Setujui</button>`;
+                        actionButtons = `<button class="btn-warning" style="width: auto; margin: 2px;" onclick="approveUser('${user.username}')">Setujui</button>`;
                         break;
                     case 'REJECTED':
-                        statusText = 'REJECTED';
                         statusClass = 'status-rejected';
-                        actionButtons = `<button class="btn-warning" style="width: auto; margin: 2px;" onclick="approveUser(${user.id})">Setujui</button>`;
+                        actionButtons = `<button class="btn-warning" style="width: auto; margin: 2px;" onclick="approveUser('${user.username}')">Setujui</button>`;
                         break;
                     default:
                         statusText = 'UNKNOWN';
@@ -1086,13 +1138,12 @@
                         break;
                 }
 
-                // Tombol Edit dan Hapus selalu ada
-                actionButtons += `<button class="btn-primary" style="width: auto; background-color: orange; margin: 2px;" onclick="editUser(${user.id})">Edit</button>
-                                  <button class="btn-danger" style="width: auto; margin: 2px;" onclick="deleteUser(${user.id})">Hapus</button>`;
+                // Tombol Edit dan Hapus
+                actionButtons += `<button class="btn-primary" style="width: auto; background-color: orange; margin: 2px;" onclick="editUser('${user.username}')">Edit</button>
+                                  <button class="btn-danger" style="width: auto; margin: 2px;" onclick="deleteUser('${user.username}')">Hapus</button>`;
 
 
                 row.innerHTML = `
-                    <td>${user.id}</td>
                     <td>${user.username}</td>
                     <td>${user.email}</td>
                     <td>${user.role}</td> 
@@ -1102,71 +1153,105 @@
             });
         }
         
-        function updateUserStatus(id, newStatus) {
-             const user = users.find(u => u.id === id);
-             if (user) {
-                 user.status = newStatus;
-                 alert(`Status user ${user.username} berhasil diubah menjadi ${newStatus}.`);
+        // Fungsi helper yang dimodifikasi untuk API
+        async function updateUserStatusByUsername(username, newStatus) {
+             const success = await updateUserOnSheetDB(username, { status: newStatus });
+             if (success) {
+                 alert(`Status user ${username} berhasil diubah menjadi ${newStatus}.`);
                  renderUserTable();
              }
         }
 
-        function approveUser(id) {
-             updateUserStatus(id, 'APPROVED');
+        async function approveUser(username) {
+             await updateUserStatusByUsername(username, 'APPROVED');
         }
         window.approveUser = approveUser;
 
-        function rejectUser(id) {
-             updateUserStatus(id, 'REJECTED');
+        async function rejectUser(username) {
+             await updateUserStatusByUsername(username, 'REJECTED');
         }
         window.rejectUser = rejectUser;
 
-        function saveUser(event) {
+        async function saveUser(event) {
             event.preventDefault(); 
-            const id = document.getElementById('user-id').value;
-            const username = document.getElementById('user-username').value;
+            // Ambil username dari hidden field (untuk edit)
+            const oldUsername = document.getElementById('user-username-hidden').value; 
+            const newUsername = document.getElementById('user-username').value;
             const email = document.getElementById('user-email').value;
             const password = document.getElementById('user-password').value;
             const role = document.getElementById('user-role').value;
 
-            if (id) {
-                // UPDATE USER
-                const index = users.findIndex(u => u.id === parseInt(id));
-                if (index !== -1) {
-                    users[index].username = username;
-                    users[index].email = email;
-                    users[index].role = role;
-                    if (password) {
-                        users[index].password = password;
-                    }
-                    alert(`User ${username} berhasil diperbarui.`);
+            if (oldUsername) {
+                // LOGIKA UPDATE USER (PUT API)
+                const updateData = {
+                    username: newUsername, // Bisa ganti username
+                    email: email,
+                    role: role,
+                };
+                if (password) {
+                    updateData.password = password;
                 }
+                
+                const success = await updateUserOnSheetDB(oldUsername, updateData);
+                
+                if (success) {
+                    alert(`User ${newUsername} berhasil diperbarui.`);
+                    resetUserForm();
+                    renderUserTable();
+                }
+
             } else {
-                // CREATE NEW USER (VIA MASTER INPUT)
+                // LOGIKA CREATE NEW USER (POST API)
                 if (!password) {
                      alert('Gagal: Password wajib diisi untuk user baru.');
                      return;
                 }
-                const newUser = {
-                    id: nextUserId++,
-                    username: username,
-                    email: email || 'default@email.com', 
-                    password: password,
-                    role: role, 
-                    status: 'APPROVED' // Jika dibuat oleh Master, status langsung APPROVED
-                };
-                users.push(newUser);
-                alert(`User ${username} berhasil ditambahkan.`);
-            }
+                
+                // Cek duplikasi di array lokal (yang sudah di-fetch dari API)
+                if (users.find(u => u.username === newUsername)) {
+                    alert('Pendaftaran gagal. Username sudah digunakan.');
+                    return;
+                }
 
-            resetUserForm();
-            renderUserTable();
+                const dataToSend = {
+                    data: {
+                        username: newUsername,
+                        password: password,
+                        email: email, 
+                        role: role, 
+                        status: 'APPROVED' // Jika dibuat oleh Master, status langsung APPROVED
+                    }
+                };
+
+                try {
+                    const response = await fetch(BASE_API_URL, {
+                        method: 'POST', 
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
+
+                    if (response.ok) {
+                        await fetchUsers();
+                        alert(`User ${newUsername} berhasil ditambahkan.`);
+                        resetUserForm();
+                        renderUserTable();
+                    } else {
+                        alert('Gagal menambahkan user. Cek konfigurasi SheetDB.');
+                    }
+                } catch (error) {
+                    console.error('Error Tambah User:', error);
+                    alert('Koneksi server gagal saat menambah user.');
+                }
+            }
         }
 
-        function editUser(id) {
-            const user = users.find(u => u.id === id);
+        function editUser(username) {
+            const user = users.find(u => u.username === username);
             if (user) {
-                document.getElementById('user-id').value = user.id;
+                // Simpan username lama di hidden field
+                document.getElementById('user-username-hidden').value = user.username;
                 document.getElementById('user-username').value = user.username;
                 document.getElementById('user-email').value = user.email;
                 document.getElementById('user-role').value = user.role;
@@ -1177,21 +1262,40 @@
             }
         }
         
-        function deleteUser(id) {
-            const index = users.findIndex(u => u.id === id);
-            if (index !== -1 && confirm(`Apakah Anda yakin ingin menghapus user ${users[index].username}?`)) {
-                if (users[index].role === 'MASTER' && users.filter(u => u.role === 'MASTER').length <= 1) {
+        async function deleteUser(username) {
+            const user = users.find(u => u.username === username);
+            if (!user) return;
+
+            if (confirm(`Apakah Anda yakin ingin menghapus user ${user.username}? Aksi ini tidak bisa dibatalkan!`)) {
+                if (user.role === 'MASTER' && users.filter(u => u.role === 'MASTER').length <= 1) {
                     alert("Gagal: Harus ada minimal satu user MASTER.");
                     return;
                 }
-                users.splice(index, 1);
-                alert('User berhasil dihapus.');
-                renderUserTable();
+                
+                try {
+                    // Delete API: SheetDB menggunakan /username/:nilai
+                    const deleteUrl = `${BASE_API_URL}/username/${username}`; 
+                    
+                    const response = await fetch(deleteUrl, {
+                        method: 'DELETE',
+                    });
+                    
+                    if (response.ok) {
+                        alert(`User ${username} berhasil dihapus dari SheetDB.`);
+                        await fetchUsers(); 
+                        renderUserTable();
+                    } else {
+                        alert('Gagal menghapus user. Cek konfigurasi SheetDB.');
+                    }
+                } catch (error) {
+                    console.error('Error Delete:', error);
+                    alert('Koneksi server gagal saat menghapus user.');
+                }
             }
         }
 
         function resetUserForm() {
-            document.getElementById('user-id').value = '';
+            document.getElementById('user-username-hidden').value = '';
             document.getElementById('user-username').value = '';
             document.getElementById('user-email').value = '';
             document.getElementById('user-password').value = '';
@@ -1206,18 +1310,21 @@
         window.resetUserForm = resetUserForm;
 
         // ======================================
-        // G. Logika Login dan Register
+        // G. Logika Login dan Register (DIUBAH TOTAL UNTUK API)
         // ======================================
 
-        function handleLogin(event) {
+        async function handleLogin(event) {
             event.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
 
+            // PENTING: Ambil data terbaru dari SheetDB sebelum mencari
+            await fetchUsers(); 
+            
             const user = users.find(u => u.username === username && u.password === password);
 
             if (!user) {
-                alert('Login gagal! Username atau Password salah.');
+                alert('Login gagal! Username atau Password salah, atau akun belum terdaftar.');
                 return;
             }
             
@@ -1234,12 +1341,6 @@
             // JIKA STATUS APPROVED
             currentUsername = user.username;
             currentUserRole = user.role;
-            
-            // START MODIFIKASI: Simpan status login ke sesi
-            sessionStorage.setItem('loggedInUser', currentUsername);
-            sessionStorage.setItem('loggedInRole', currentUserRole);
-            // END MODIFIKASI
-
             alert(`Login berhasil! Selamat datang, ${currentUsername} (${currentUserRole}).`);
             showView('dashboard-view');
             
@@ -1258,37 +1359,61 @@
             switchDashboardContent(defaultContentId, defaultMenuElement);
         }
 
-        function handleRegister(event) {
+        async function handleRegister(event) {
             event.preventDefault();
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value; 
 
+            // Pastikan data terbaru sudah di-fetch
+            await fetchUsers(); 
             if (users.find(u => u.username === username)) {
                 alert('Pendaftaran gagal. Username sudah digunakan.');
                 return;
             }
 
-            const newUser = {
-                id: nextUserId++,
-                username: username,
-                email: 'registered_without_email@default.com', // Nilai default 
-                password: password,
-                role: 'CS', 
-                status: 'PENDING' // STATUS DEFAULT BARU UNTUK REGISTER
+            const dataToSend = {
+                data: {
+                    username: username,
+                    password: password,
+                    email: 'registered_without_email@default.com',
+                    role: 'CS', // Default role untuk register
+                    status: 'PENDING' // STATUS DEFAULT BARU UNTUK REGISTER
+                }
             };
 
-            users.push(newUser);
-            
-            alert(`Pendaftaran berhasil! Akun ${username} berhasil dibuat. Status: MENUNGGU ACC...`);
-            document.getElementById('register-form').reset();
-            showView('login-view');
+            try {
+                const response = await fetch(BASE_API_URL, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(dataToSend)
+                });
+
+                if (response.ok) {
+                    // Setelah berhasil register, muat ulang data user global
+                    await fetchUsers(); 
+                    alert(`Pendaftaran berhasil! Akun ${username} berhasil dibuat. Status: MENUNGGU ACC...`);
+                    document.getElementById('register-form').reset();
+                    showView('login-view');
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Terjadi kesalahan server.' }));
+                    alert(`Pendaftaran gagal. ${errorData.message || 'Cek koneksi atau SheetDB Anda.'}`);
+                }
+            } catch (error) {
+                console.error('Error Pendaftaran:', error);
+                alert('Koneksi server gagal.');
+            }
         }
 
         // ======================================
         // H. Inisialisasi Event Listener
         // ======================================
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // PENTING: Ambil data user dari SheetDB sebelum inisialisasi form login
+            await fetchUsers(); 
+            
             document.getElementById('login-form').addEventListener('submit', handleLogin);
             document.getElementById('register-form').addEventListener('submit', handleRegister);
             document.getElementById('user-form').addEventListener('submit', saveUser);
@@ -1304,36 +1429,7 @@
                 }
             });
             
-            // START MODIFIKASI: Cek sesi saat halaman dimuat
-            const storedUser = sessionStorage.getItem('loggedInUser');
-            const storedRole = sessionStorage.getItem('loggedInRole');
-
-            if (storedUser && storedRole) {
-                 // Restore state and go to dashboard
-                 currentUsername = storedUser;
-                 currentUserRole = storedRole;
-                 
-                 // Pindah ke dashboard tanpa menampilkan alert login ulang
-                 showView('dashboard-view');
-                 
-                 // Re-apply default view logic based on restored role
-                 let defaultContentId;
-                 let defaultMenuElement;
-
-                 if (currentUserRole === 'KAPTEN') {
-                     defaultContentId = 'cek-to-crm';
-                     defaultMenuElement = document.getElementById('menu-cek-to-crm');
-                 } else {
-                     defaultContentId = 'cek-ip';
-                     defaultMenuElement = document.getElementById('menu-cek-ip');
-                 }
-                 
-                 switchDashboardContent(defaultContentId, defaultMenuElement);
-                 
-            } else {
-                showView('login-view'); 
-            }
-            // END MODIFIKASI
+            showView('login-view'); 
         });
         
     </script>
