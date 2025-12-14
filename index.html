@@ -288,8 +288,7 @@
     
     <div id="main-app-container">
 
-        <section id="login-view" class="app-container-small">
-            <h1>👋 Selamat Datang</h1>
+        <section id="login-view" class="app-container-small" style="display: none;"> <h1>👋 Selamat Datang</h1>
             <p>Silakan masuk ke akun Anda.</p>
             <form id="login-form">
                 <div class="input-group">
@@ -588,7 +587,7 @@
                 menu.style.display = (role === 'MASTER') ? 'block' : 'none';
             });
 
-            // 2. Tangani menu yang disembunyikan untuk KAPTEN (Cek IP, Prediksi Bola)
+            // 2. Tangani menu yang disembunyikan untuk KAPTEN (Cek IP & Prediksi Bola)
             const kaptenHiddenMenus = document.querySelectorAll('.menu-kapten-hidden');
             const kaptenHiddenVisibility = (role === 'KAPTEN') ? 'none' : 'block'; 
             kaptenHiddenMenus.forEach(menu => {
@@ -645,12 +644,6 @@
 
         function handleLogout() {
             alert('Anda telah berhasil keluar (logout).');
-            
-            // 🛑 PERBAIKAN 2: Hapus data dari localStorage saat logout
-            localStorage.removeItem('loggedInUser');
-            localStorage.removeItem('loggedInRole');
-            // --------------------------------------------------------
-            
             currentUsername = null; 
             currentUserRole = null;
             showView('login-view');
@@ -664,6 +657,7 @@
         // ======================================
         
         // ... (Kode Logika Cek IP dan History IP tetap sama) ... 
+        // NOTE: History IP masih menggunakan localStorage, belum terpusat.
         
         function processData() {
             const rawData = document.getElementById('logInput').value;
@@ -1238,8 +1232,7 @@
                     });
 
                     if (response.ok) {
-                        // Setelah berhasil register, muat ulang data user global
-                        await fetchUsers(); 
+                        await fetchUsers();
                         alert(`User ${newUsername} berhasil ditambahkan.`);
                         resetUserForm();
                         renderUserTable();
@@ -1347,12 +1340,6 @@
             // JIKA STATUS APPROVED
             currentUsername = user.username;
             currentUserRole = user.role;
-            
-            // 🛑 PERBAIKAN 1: Simpan status login ke localStorage
-            localStorage.setItem('loggedInUser', currentUsername);
-            localStorage.setItem('loggedInRole', currentUserRole);
-            // ----------------------------------------------------
-            
             alert(`Login berhasil! Selamat datang, ${currentUsername} (${currentUserRole}).`);
             showView('dashboard-view');
             
@@ -1425,34 +1412,6 @@
         document.addEventListener('DOMContentLoaded', async () => {
             // PENTING: Ambil data user dari SheetDB sebelum inisialisasi form login
             await fetchUsers(); 
-            
-            // 🛑 PERBAIKAN 3: Cek status login di localStorage saat memuat halaman
-            const storedUsername = localStorage.getItem('loggedInUser');
-            const storedRole = localStorage.getItem('loggedInRole');
-
-            if (storedUsername && storedRole) {
-                currentUsername = storedUsername;
-                currentUserRole = storedRole;
-                
-                // Tentukan default view berdasarkan role yang tersimpan
-                let defaultContentId;
-                let defaultMenuElement;
-
-                if (currentUserRole === 'KAPTEN') {
-                    defaultContentId = 'cek-to-crm';
-                    defaultMenuElement = document.getElementById('menu-cek-to-crm');
-                } else {
-                    defaultContentId = 'cek-ip';
-                    defaultMenuElement = document.getElementById('menu-cek-ip');
-                }
-                
-                showView('dashboard-view');
-                switchDashboardContent(defaultContentId, defaultMenuElement);
-                
-                console.log(`Auto-login berhasil untuk ${currentUsername} (${currentUserRole}).`);
-                return; // Hentikan dan jangan tampilkan login-view
-            }
-            // --------------------------------------------------------------------------
             
             document.getElementById('login-form').addEventListener('submit', handleLogin);
             document.getElementById('register-form').addEventListener('submit', handleRegister);
