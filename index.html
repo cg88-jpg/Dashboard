@@ -288,7 +288,8 @@
     
     <div id="main-app-container">
 
-        <section id="login-view" class="app-container-small" style="display: none;"> <h1>👋 Selamat Datang</h1>
+        <section id="login-view" class="app-container-small" style="display: none;">
+            <h1>👋 Selamat Datang</h1>
             <p>Silakan masuk ke akun Anda.</p>
             <form id="login-form">
                 <div class="input-group">
@@ -490,7 +491,7 @@
         
         // Inisiasi array kosong. Akan diisi oleh fetchUsers()
         let users = []; 
-        let nextUserId = 1; // ID ini tidak lagi relevan, tapi dipertahankan untuk kompatibilitas kode lama.
+        let nextUserId = 1; 
 
         // FUNGSI UTAMA: Mengambil semua data user dari SheetDB
         async function fetchUsers() {
@@ -502,9 +503,7 @@
                 const data = await response.json();
                 
                 // PENTING: Map dan parse data dari SheetDB. 
-                // SheetDB menyimpan angka dan JSON sebagai string.
                 users = data.map(user => ({
-                    // ID lokal tidak lagi digunakan, tapi kita masukkan username sebagai identifier.
                     id: user.username, 
                     username: user.username,
                     email: user.email || 'default@email.com',
@@ -575,8 +574,7 @@
             } else {
                 mainAppContainer.className = 'app-container-small';
                 document.getElementById(viewId).style.display = 'block'; 
-                currentUsername = null; 
-                currentUserRole = null;
+                // NOTE: Session direset hanya saat handleLogout dipanggil, bukan di sini
             }
         }
         
@@ -643,6 +641,10 @@
         }
 
         function handleLogout() {
+            // HAPUS SESSION DARI LOCALSTORAGE
+            localStorage.removeItem('loggedInUser');
+            localStorage.removeItem('loggedInRole');
+
             alert('Anda telah berhasil keluar (logout).');
             currentUsername = null; 
             currentUserRole = null;
@@ -655,9 +657,6 @@
         // ======================================
         // B. Logika Cek IP & History IP
         // ======================================
-        
-        // ... (Kode Logika Cek IP dan History IP tetap sama) ... 
-        // NOTE: History IP masih menggunakan localStorage, belum terpusat.
         
         function processData() {
             const rawData = document.getElementById('logInput').value;
@@ -817,7 +816,7 @@
 
 
         // ======================================
-        // C. Logika CEK TO CRM (TIDAK BERUBAH)
+        // C. Logika CEK TO CRM 
         // ======================================
         
         function processToData() {
@@ -875,7 +874,7 @@
 
 
         // ======================================
-        // D. Logika HITUNG KEMENANGAN PG SOFT (TIDAK BERUBAH)
+        // D. Logika HITUNG KEMENANGAN PG SOFT 
         // ======================================
         
         function processPgSoftData() {
@@ -1023,7 +1022,7 @@
 
 
         // ======================================
-        // E. Logika Prediksi Bola (TIDAK BERUBAH)
+        // E. Logika Prediksi Bola
         // ======================================
 
         function generateTable() {
@@ -1102,7 +1101,7 @@
 
 
         // ======================================
-        // F. Logika CRUD User & Approval (DIUBAH TOTAL UNTUK API)
+        // F. Logika CRUD User & Approval 
         // ======================================
         
         function renderUserTable() {
@@ -1145,7 +1144,7 @@
                 row.innerHTML = `
                     <td>${user.username}</td>
                     <td>${user.email}</td>
-                    <td>${user.role}</td> 
+                    <td><td>${user.role}</td> 
                     <td class="${statusClass}">${statusText}</td>
                     <td>${actionButtons}</td>
                 `;
@@ -1309,7 +1308,7 @@
         window.resetUserForm = resetUserForm;
 
         // ======================================
-        // G. Logika Login dan Register (DIUBAH TOTAL UNTUK API)
+        // G. Logika Login dan Register
         // ======================================
 
         async function handleLogin(event) {
@@ -1340,6 +1339,11 @@
             // JIKA STATUS APPROVED
             currentUsername = user.username;
             currentUserRole = user.role;
+            
+            // SIMPAN SESSION KE LOCALSTORAGE
+            localStorage.setItem('loggedInUser', currentUsername);
+            localStorage.setItem('loggedInRole', currentUserRole);
+
             alert(`Login berhasil! Selamat datang, ${currentUsername} (${currentUserRole}).`);
             showView('dashboard-view');
             
@@ -1413,6 +1417,31 @@
             // PENTING: Ambil data user dari SheetDB sebelum inisialisasi form login
             await fetchUsers(); 
             
+            // BARU: Cek Sesi Tersimpan di localStorage
+            const storedUser = localStorage.getItem('loggedInUser');
+            const storedRole = localStorage.getItem('loggedInRole');
+
+            if (storedUser && storedRole) {
+                // Jika ada sesi tersimpan, langsung masuk ke Dashboard
+                currentUsername = storedUser;
+                currentUserRole = storedRole;
+                showView('dashboard-view');
+                
+                // Atur tampilan default berdasarkan Role yang tersimpan
+                let defaultContentId = (storedRole === 'KAPTEN') ? 'cek-to-crm' : 'cek-ip';
+                let defaultMenuElement = document.getElementById(`menu-${defaultContentId}`);
+                
+                // Pastikan elemen defaultContentId ada sebelum memanggil switchDashboardContent
+                if (defaultMenuElement) {
+                   switchDashboardContent(defaultContentId, defaultMenuElement);
+                }
+                
+                console.log(`Sesi dipulihkan untuk: ${storedUser} (${storedRole})`);
+            } else {
+                // Jika tidak ada sesi, tampilkan halaman login
+                showView('login-view'); 
+            }
+            
             document.getElementById('login-form').addEventListener('submit', handleLogin);
             document.getElementById('register-form').addEventListener('submit', handleRegister);
             document.getElementById('user-form').addEventListener('submit', saveUser);
@@ -1428,7 +1457,6 @@
                 }
             });
             
-            showView('login-view'); 
         });
         
     </script>
