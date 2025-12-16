@@ -282,35 +282,6 @@
         #history-table th { background-color: #ffeb3b; } /* Warna Kuning untuk Master */
         .history-raw-data { max-height: 100px; overflow: auto; background-color: #f8f8f8; padding: 5px; border-radius: 3px; font-family: monospace; white-space: pre-wrap; word-break: break-all; }
 
-        /* Log Master Specific CSS */
-        #content-log-master { 
-            background-color: rgba(255, 255, 255, 0.95); 
-            color: #333;
-        }
-        #log-master-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px; 
-            font-size: 0.9em; 
-        }
-        #log-master-table thead th { 
-            background-color: #007bff; /* Biru terang untuk header tabel (sesuai gambar) */
-            color: white; 
-            padding: 12px 10px; 
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        #log-master-table tbody td { 
-            border: 1px solid #ddd; 
-            padding: 10px; 
-            text-align: left;
-        }
-        #log-master-table tbody tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        #log-master-table tbody tr:hover {
-            background-color: #e6f0ff;
-        }
     </style>
 </head>
 <body>
@@ -339,7 +310,7 @@
 
         <section id="register-view" class="app-container-small" style="display: none;">
             <h1>✍️ Daftar Akun Baru</h1>
-            <p>Isi detail Anda untuk membuat akun. Akun baru akan berstatus PENDING dan perlu disetujui Master.</p>
+            <p>Isi detail Anda untuk membuat akun.</p>
             <form id="register-form">
                 <div class="input-group">
                     <label for="reg-username">Username:</label>
@@ -371,9 +342,6 @@
                 <a href="#" class="menu-item menu-kapten-hidden" data-content="prediksi-bola" id="menu-prediksi-bola" onclick="switchDashboardContent('prediksi-bola', this); return false;">⚽ PREDIKSI BOLA</a>
                 
                 <a href="#" class="menu-item menu-master-only" data-content="kelola-user" id="menu-kelola-user" onclick="switchDashboardContent('kelola-user', this); return false;">👤 Kelola User</a> 
-                
-                <a href="#" class="menu-item menu-master-only" data-content="log-master" id="menu-log-master" onclick="switchDashboardContent('log-master', this); return false;">📋 Log Master</a> 
-                
                 <button id="logout-button" class="btn btn-danger" onclick="handleLogout(); return false;">Keluar (Logout)</button>
             </div>
             
@@ -492,8 +460,7 @@
                                     <th>Username</th>
                                     <th>Email</th>
                                     <th>Role</th>
-                                    <th>Status</th> 
-                                    <th>Terakhir Login</th> <th>Aksi</th>
+                                    <th>Status</th> <th>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -501,29 +468,7 @@
                         </table>
                     </div>
                 </div>
-
-                <div id="content-log-master" class="content-panel menu-master-only" style="display: none;">
-                    <h2>📋 Log Aktivitas Login Staff</h2>
-                    <p>Melihat semua riwayat login staf, bukan user member.</p>
-                    <p style="color:red; font-weight:bold;">⚠️ PENTING: Untuk implementasi penuh, disarankan menggunakan SheetDB terpisah khusus untuk Log Login agar kinerja daftar user utama tetap cepat.</p>
-                    
-                    <div id="log-master-list">
-                        <table id="log-master-table">
-                            <thead>
-                                <tr>
-                                    <th>Nama</th>
-                                    <th>IP Address</th>
-                                    <th>Perangkat</th>
-                                    <th>Waktu Login</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="4" style="text-align: center;">Memuat data log...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                </div>
+            </div>
             
         </section>
 
@@ -531,13 +476,11 @@
 
     <script>
         // ======================================
-        // C. KONEKSI API TERPUSAT (SheetDB) - REVERSED TO SHEETDB
+        // C. KONEKSI API TERPUSAT (SheetDB) - PERUBAHAN UTAMA DI SINI
         // ======================================
         
-        // TEMPELKAN LINK SHEETDB ANDA DI SINI (URL asli Anda dari konteks sebelumnya)
+        // TEMPELKAN LINK SHEETDB ANDA DI SINI
         const BASE_API_URL = 'https://sheetdb.io/api/v1/u3plihngfze98'; 
-        // Log API menggunakan URL yang sama, pastikan kolom log (Nama, IP_Address, Perangkat, Waktu_Login) ada di Sheet ini.
-        const LOG_API_URL = BASE_API_URL; 
 
         const mainAppContainer = document.getElementById('main-app-container');
         const THRESHOLD = 3; 
@@ -550,7 +493,6 @@
         let users = []; 
         let nextUserId = 1; 
 
-
         // FUNGSI UTAMA: Mengambil semua data user dari SheetDB
         async function fetchUsers() {
             try {
@@ -561,8 +503,7 @@
                 const data = await response.json();
                 
                 // PENTING: Map dan parse data dari SheetDB. 
-                // Kita perlu filter data log saat mengambil data user jika menggunakan satu sheet.
-                users = data.filter(user => user.role && user.password).map(user => ({
+                users = data.map(user => ({
                     id: user.username, 
                     username: user.username,
                     email: user.email || 'default@email.com',
@@ -570,17 +511,15 @@
                     role: user.role,
                     status: user.status || 'PENDING',
                     // Pastikan properti ip_history ada (walaupun hanya string '[]' dari Sheets)
-                    ip_history: user.ip_history ? JSON.parse(user.ip_history) : [],
-                    // Field untuk Terakhir Login (diperlukan kolom 'last_login_time' di SheetDB)
-                    last_login_time: user.last_login_time || 'Belum pernah login' 
+                    ip_history: user.ip_history ? JSON.parse(user.ip_history) : []
                 }));
                 
                 console.log("Data user berhasil di-fetch dan di-parse:", users);
                 return users;
             } catch (error) {
                 console.error('Fetch Users Error:', error);
-                // Biarkan array users kosong jika fetch gagal, agar tidak menimpa data
-                return users;
+                alert('Gagal terhubung ke database terpusat. Pastikan Google Sheet dan SheetDB Anda aktif dan sudah di-Share.');
+                return [];
             }
         }
         
@@ -608,11 +547,12 @@
                     return true;
                 } else {
                     const errorData = await response.json().catch(() => ({ message: 'Error server saat update.' }));
-                    console.error(`Gagal update user ${username}. Pesan: ${errorData.message}`);
+                    alert(`Gagal update user ${username}. Pesan: ${errorData.message}`);
                     return false;
                 }
             } catch (error) {
                 console.error('Error Update:', error);
+                alert('Gagal terhubung ke SheetDB saat update.');
                 return false;
             }
         }
@@ -639,7 +579,7 @@
         }
         
         function updateSidebarVisibility(role) {
-            // 1. Tangani menu hanya untuk MASTER (Kelola User, Log Master)
+            // 1. Tangani menu hanya untuk MASTER (Kelola User)
             const masterMenus = document.querySelectorAll('.menu-master-only');
             masterMenus.forEach(menu => {
                 menu.style.display = (role === 'MASTER') ? 'block' : 'none';
@@ -671,7 +611,7 @@
             if (box && username) {
                 box.innerHTML = `Anda login sebagai: <strong><span style="color: #007bff;">${username}</span></strong>`;
             } else if (box) {
-                // box.innerHTML = ''; // Kosongkan box di menu lain
+                box.innerHTML = ''; // Kosongkan box di menu lain
             }
         }
 
@@ -697,8 +637,6 @@
                 renderUserTable();
             } else if (contentId === 'history-ip') { 
                 renderHistoryTable();
-            } else if (contentId === 'log-master') {
-                loadLogMasterList(); // Panggil fungsi baru
             }
         }
 
@@ -706,7 +644,6 @@
             // HAPUS SESSION DARI LOCALSTORAGE
             localStorage.removeItem('loggedInUser');
             localStorage.removeItem('loggedInRole');
-            localStorage.removeItem('sessionStartTime');
 
             alert('Anda telah berhasil keluar (logout).');
             currentUsername = null; 
@@ -718,8 +655,9 @@
 
 
         // ======================================
-        // B. Logika Cek IP & History IP (Tidak Diubah)
+        // B. Logika Cek IP & History IP
         // ======================================
+        
         function processData() {
             const rawData = document.getElementById('logInput').value;
             if (!rawData.trim()) {
@@ -878,7 +816,7 @@
 
 
         // ======================================
-        // C. Logika CEK TO CRM (Tidak Diubah)
+        // C. Logika CEK TO CRM 
         // ======================================
         
         function processToData() {
@@ -936,7 +874,7 @@
 
 
         // ======================================
-        // D. Logika HITUNG KEMENANGAN PG SOFT (Tidak Diubah)
+        // D. Logika HITUNG KEMENANGAN PG SOFT 
         // ======================================
         
         function processPgSoftData() {
@@ -1084,7 +1022,7 @@
 
 
         // ======================================
-        // E. Logika Prediksi Bola (Tidak Diubah)
+        // E. Logika Prediksi Bola
         // ======================================
 
         function generateTable() {
@@ -1163,7 +1101,7 @@
 
 
         // ======================================
-        // F. Logika CRUD User & Approval (Menggunakan SheetDB)
+        // F. Logika CRUD User & Approval 
         // ======================================
         
         function renderUserTable() {
@@ -1202,17 +1140,12 @@
                 actionButtons += `<button class="btn-primary" style="width: auto; background-color: orange; margin: 2px;" onclick="editUser('${user.username}')">Edit</button>
                                   <button class="btn-danger" style="width: auto; margin: 2px;" onclick="deleteUser('${user.username}')">Hapus</button>`;
 
-                // Format waktu terakhir login
-                const formattedLastLogin = (user.last_login_time && user.last_login_time !== 'Belum pernah login') 
-                    ? formatHistoryTimestamp(user.last_login_time)
-                    : user.last_login_time;
 
                 row.innerHTML = `
                     <td>${user.username}</td>
                     <td>${user.email}</td>
                     <td>${user.role}</td> 
                     <td class="${statusClass}">${statusText}</td>
-                    <td>${formattedLastLogin}</td> 
                     <td>${actionButtons}</td>
                 `;
             });
@@ -1284,8 +1217,7 @@
                         password: password,
                         email: email, 
                         role: role, 
-                        status: 'APPROVED', // Jika dibuat oleh Master, status langsung APPROVED
-                        last_login_time: 'Belum pernah login' 
+                        status: 'APPROVED' // Jika dibuat oleh Master, status langsung APPROVED
                     }
                 };
 
@@ -1375,59 +1307,10 @@
         window.deleteUser = deleteUser;
         window.resetUserForm = resetUserForm;
 
-
         // ======================================
-        // G. Logika Login dan Register (Menggunakan SheetDB)
+        // G. Logika Login dan Register
         // ======================================
-        
-        // FUNGSI BARU: Mendapatkan info perangkat untuk log
-        function getDeviceInfo() {
-            const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-            const device = isMobile ? 'Mobile' : 'Desktop';
-            // Mencari IP publik di sisi klien tanpa API eksternal yang kompleks adalah sulit dan tidak reliable.
-            // Kita akan menggunakan placeholder sederhana.
-            // Jika Anda ingin IP yang akurat, Anda perlu menggunakan API pihak ketiga (e.g., ipify.org) atau service backend.
-            return {
-                // Ganti dengan implementasi IP jika Anda punya service eksternal.
-                ip: 'N/A (Cek dari Log SheetDB)', 
-                device: device
-            };
-        }
 
-        // FUNGSI BARU: Menyimpan Log Aktivitas Login
-        async function saveLoginLog(username, role) {
-            const info = getDeviceInfo();
-            // Format waktu ISO 8601
-            const now = new Date().toISOString().replace('T', ' ').substring(0, 19); 
-
-            const dataToSend = {
-                data: {
-                    // Kolom harus sesuai dengan nama kolom di Google Sheet Anda
-                    Nama: `${username} (${role})`,
-                    IP_Address: info.ip, 
-                    Perangkat: info.device,
-                    Waktu_Login: now,
-                }
-            };
-
-            try {
-                const response = await fetch(LOG_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToSend)
-                });
-                if (!response.ok) {
-                    console.error('Gagal menyimpan log login:', await response.json());
-                    return false;
-                }
-                console.log('Log login berhasil disimpan ke SheetDB.');
-                return true;
-            } catch (error) {
-                console.error('Error menyimpan log login:', error);
-                return false;
-            }
-        }
-        
         async function handleLogin(event) {
             event.preventDefault();
             const username = document.getElementById('username').value;
@@ -1436,7 +1319,6 @@
             // PENTING: Ambil data terbaru dari SheetDB sebelum mencari
             await fetchUsers(); 
             
-            // Perhatikan: Role di sheet DB disimpan dalam huruf besar (MASTER, KAPTEN, CS)
             const user = users.find(u => u.username === username && u.password === password);
 
             if (!user) {
@@ -1461,14 +1343,6 @@
             // SIMPAN SESSION KE LOCALSTORAGE
             localStorage.setItem('loggedInUser', currentUsername);
             localStorage.setItem('loggedInRole', currentUserRole);
-            localStorage.setItem('sessionStartTime', new Date().getTime());
-            
-            // Catat Waktu Terakhir Login ke SheetDB (di kolom user)
-            await updateUserOnSheetDB(currentUsername, { last_login_time: new Date().toISOString() });
-
-            // *** BARU: Simpan log login ke sheet terpisah/sama (LOG_API_URL) ***
-            await saveLoginLog(currentUsername, currentUserRole);
-
 
             alert(`Login berhasil! Selamat datang, ${currentUsername} (${currentUserRole}).`);
             showView('dashboard-view');
@@ -1493,10 +1367,6 @@
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value; 
 
-            // Role dan Status diset default
-            const role = 'CS'; 
-            const status = 'PENDING'; 
-            
             // Pastikan data terbaru sudah di-fetch
             await fetchUsers(); 
             if (users.find(u => u.username === username)) {
@@ -1508,10 +1378,9 @@
                 data: {
                     username: username,
                     password: password,
-                    email: 'registered_without_email@default.com', // Email default
-                    role: role, 
-                    status: status, 
-                    last_login_time: 'Belum pernah login' 
+                    email: 'registered_without_email@default.com',
+                    role: 'CS', // Default role untuk register
+                    status: 'PENDING' // STATUS DEFAULT BARU UNTUK REGISTER
                 }
             };
 
@@ -1539,98 +1408,30 @@
                 alert('Koneksi server gagal.');
             }
         }
-        
-        // ======================================
-        // H. Logika Log Master (FETCH dari SheetDB)
-        // ======================================
-        
-        // FUNGSI BARU: Mengambil data log dari SheetDB
-        async function fetchLoginLogs() {
-            try {
-                const response = await fetch(LOG_API_URL);
-                if (!response.ok) throw new Error('Gagal mengambil data log dari SheetDB.');
-                const data = await response.json();
-                
-                // Filter data yang merupakan log (memiliki kolom log yang lengkap)
-                const logs = data.filter(item => item.Nama && item.IP_Address && item.Waktu_Login)
-                                 .map(log => ({
-                    user: log.Nama, 
-                    ip: log.IP_Address, 
-                    device: log.Perangkat || 'N/A', 
-                    time: log.Waktu_Login, 
-                }));
-                return logs;
-            } catch (error) {
-                console.error('Fetch Login Logs Error:', error);
-                return []; 
-            }
-        }
-        
-        async function loadLogMasterList() {
-            const tbody = document.querySelector('#log-master-table tbody');
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Mengambil data log...</td></tr>';
-
-            const logs = await fetchLoginLogs(); 
-            
-            tbody.innerHTML = ''; 
-
-            // Urutkan berdasarkan waktu login terbaru
-            const sortedLogs = logs.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-            if (sortedLogs.length === 0) {
-                 const row = tbody.insertRow();
-                 const cell = row.insertCell();
-                 cell.colSpan = 4;
-                 cell.textContent = "Tidak ada riwayat log login yang ditemukan di SheetDB.";
-                 cell.style.textAlign = 'center';
-                 return;
-            }
-
-            sortedLogs.forEach(log => {
-                const row = tbody.insertRow();
-                row.insertCell().textContent = log.user.toUpperCase(); 
-                row.insertCell().textContent = log.ip;
-                row.insertCell().textContent = log.device;
-                // Format waktu agar lebih mudah dibaca
-                row.insertCell().textContent = log.time ? formatHistoryTimestamp(log.time) : 'N/A'; 
-            });
-        }
-
 
         // ======================================
-        // I. Inisialisasi Event Listener
+        // H. Inisialisasi Event Listener
         // ======================================
 
         document.addEventListener('DOMContentLoaded', async () => {
             // PENTING: Ambil data user dari SheetDB sebelum inisialisasi form login
             await fetchUsers(); 
             
-            // Cek Waktu Sesi untuk Auto-Logout (1 jam)
+            // BARU: Cek Sesi Tersimpan di localStorage
             const storedUser = localStorage.getItem('loggedInUser');
             const storedRole = localStorage.getItem('loggedInRole');
-            const sessionStartTime = localStorage.getItem('sessionStartTime');
-            const oneHour = 3600000; // 1 jam dalam milidetik
 
-            if (sessionStartTime && (new Date().getTime() - sessionStartTime > oneHour)) {
-                console.log("Sesi berakhir karena waktu habis (lebih dari 1 jam).");
-                // Hapus semua item sesi sebelum memaksa perubahan tampilan
-                localStorage.removeItem('loggedInUser');
-                localStorage.removeItem('loggedInRole');
-                localStorage.removeItem('sessionStartTime');
-                alert("Sesi Anda telah berakhir karena tidak ada aktivitas selama 1 jam terakhir. Silakan login kembali.");
-                showView('login-view');
-                return; // Hentikan inisialisasi sesi jika sudah timeout
-            }
-            
-            // Pulihkan Sesi Jika Ada
             if (storedUser && storedRole) {
+                // Jika ada sesi tersimpan, langsung masuk ke Dashboard
                 currentUsername = storedUser;
                 currentUserRole = storedRole;
                 showView('dashboard-view');
                 
+                // Atur tampilan default berdasarkan Role yang tersimpan
                 let defaultContentId = (storedRole === 'KAPTEN') ? 'cek-to-crm' : 'cek-ip';
                 let defaultMenuElement = document.getElementById(`menu-${defaultContentId}`);
                 
+                // Pastikan elemen defaultContentId ada sebelum memanggil switchDashboardContent
                 if (defaultMenuElement) {
                    switchDashboardContent(defaultContentId, defaultMenuElement);
                 }
